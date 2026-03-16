@@ -6,7 +6,7 @@ from datetime import timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.util import timedelta_seconds
 from django.utils import timezone
-from django.db import transaction
+from django.db import close_old_connections, connections, transaction
 from .remind import Remind
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ class RemindScheduler(BackgroundScheduler):
     def _process_jobs(self):
         """Goodbye you apscheduler"""
         logger.debug('Looking for jobs to run')
+        close_old_connections() # close obsolete connections before processing jobs to avoid "InterfaceError: connection already closed" error
         try:
             now = timezone.now()
             grace_time = timedelta(seconds=self.misfire_grace_time)
@@ -46,6 +47,6 @@ class RemindScheduler(BackgroundScheduler):
                         logger.debug('No jobs, waiting until a job is added')
                     return wait_seconds
         # This is a vital thread, DO NOT die
-        except Exception as e:
+        except Exception:
             logger.exception('Error running scheduler job')
-
+            connections.close_all()
